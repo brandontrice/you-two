@@ -1,4 +1,4 @@
-// Root layout — loads the vintage type, starts the music, wraps auth.
+// Root layout — fonts, then Theme > Audio > navigation shell.
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { View, ActivityIndicator } from 'react-native';
@@ -15,8 +15,9 @@ import {
   CormorantGaramond_600SemiBold,
 } from '@expo-google-fonts/cormorant-garamond';
 import { AuthProvider } from '../lib/auth';
+import { ThemeProvider, useTheme } from '../lib/theme-context';
 import { AudioProvider } from '../lib/audio';
-import { theme } from '../lib/theme';
+import { palettes } from '../lib/theme';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -26,6 +27,21 @@ Notifications.setNotificationHandler({
     shouldSetBadge: false,
   }),
 });
+
+function Shell() {
+  const { c, mode } = useTheme();
+  return (
+    <>
+      <StatusBar style={mode === 'minuit' ? 'light' : 'dark'} />
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          contentStyle: { backgroundColor: c.paper },
+        }}
+      />
+    </>
+  );
+}
 
 export default function RootLayout() {
   const [playfairLoaded] = usePlayfair({
@@ -40,23 +56,19 @@ export default function RootLayout() {
 
   if (!playfairLoaded || !cormorantLoaded) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', backgroundColor: theme.paper }}>
-        <ActivityIndicator size="large" color={theme.wine} />
+      <View style={{ flex: 1, justifyContent: 'center', backgroundColor: palettes.creme.paper }}>
+        <ActivityIndicator size="large" color={palettes.creme.wine} />
       </View>
     );
   }
 
   return (
     <AuthProvider>
-      <AudioProvider>
-        <StatusBar style="dark" />
-        <Stack
-          screenOptions={{
-            headerShown: false,
-            contentStyle: { backgroundColor: theme.paper },
-          }}
-        />
-      </AudioProvider>
+      <ThemeProvider>
+        <AudioProvider>
+          <Shell />
+        </AudioProvider>
+      </ThemeProvider>
     </AuthProvider>
   );
 }
