@@ -45,20 +45,15 @@ export default function SignIn() {
     setBusy(true);
 
     if (mode === 'signup') {
-      const { data, error: signUpError } = await supabase.auth.signUp({
+      const { error: signUpError } = await supabase.auth.signUp({
         email: email.trim(),
         password,
+        options: { data: { display_name: displayName.trim() } },
       });
       if (signUpError) {
         setError(signUpError.message);
         setBusy(false);
         return;
-      }
-      if (data.user) {
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .insert({ id: data.user.id, display_name: displayName.trim() });
-        if (profileError) setError(profileError.message);
       }
     } else {
       const { error: signInError } = await supabase.auth.signInWithPassword({

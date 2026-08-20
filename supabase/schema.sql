@@ -3,13 +3,14 @@
 --
 -- This is the full, current schema as pulled from the live project (ref
 -- imbsuawcafkdvmccitie) on 2026-08-20, folded together with v1.sql's two
--- fixes: every table, column, function, trigger, policy, storage rule, and
--- scheduled job the app uses today, in one file. Safe to run on a
--- brand-new project, and safe to re-run on a project that already has
--- some or all of this: every statement below is written to skip anything
--- that already exists. v1.sql is kept alongside this file as the
--- historical record of how those two fixes originally shipped against
--- the live database — a fresh install only needs this file.
+-- fixes and v2.sql's two additions: every table, column, function,
+-- trigger, policy, storage rule, and scheduled job the app uses today, in
+-- one file. Safe to run on a brand-new project, and safe to re-run on a
+-- project that already has some or all of this: every statement below is
+-- written to skip anything that already exists. v1.sql and v2.sql are
+-- kept alongside this file as the historical record of how those changes
+-- originally shipped against the live database — a fresh install only
+-- needs this file.
 
 -- 1. extensions -----------------------------------------------------------
 
@@ -414,6 +415,27 @@ create or replace function game_timeline(p_game_id uuid) returns table (
     order by gp.dropped_at desc, s.user_id;
 $$;
 
+-- Fires on auth.users insert (on_auth_user_created below): creates the
+-- profile row atomically with signup, reading display_name out of
+-- signUp's options.data (falls back to the email's local part if
+-- missing). Client-side no longer inserts profiles directly — a killed
+-- signup or a failed client-side insert used to leave an authenticated
+-- user with no profile row, breaking every downstream profile query.
+create or replace function handle_new_user() returns trigger
+    language plpgsql security definer
+    set search_path to 'public'
+    as $$
+begin
+    insert into profiles (id, display_name)
+    values (
+        new.id,
+        coalesce(new.raw_user_meta_data->>'display_name', split_part(new.email, '@', 1))
+    )
+    on conflict (id) do nothing;
+    return new;
+end;
+$$;
+
 -- Fires on onboarding_answers insert (trg_onboarding_complete below): once
 -- this user has answered every question, kicks off AI prompt generation
 -- for every fully-paired game they're in.
@@ -499,6 +521,21 @@ create or replace function has_voted(p_game_prompt_id uuid) returns boolean
     select exists (
         select 1 from round_votes
         where game_prompt_id = p_game_prompt_id and voter_id = auth.uid()
+    );
+$$;
+
+-- Folds app/index.tsx's home-screen data into one round trip (display
+-- name, onboarding progress, "on this day," and the game list) instead of
+-- four separate requests on every screen focus.
+create or replace function home_overview() returns json
+    language sql security definer
+    set search_path to 'public'
+    as $$
+    select json_build_object(
+        'display_name', (select display_name from profiles where id = auth.uid()),
+        'answered_count', (select count(*) from onboarding_answers where user_id = auth.uid()),
+        'on_this_day', (select row_to_json(t) from (select * from on_this_day() limit 1) t),
+        'games', (select coalesce(json_agg(g), '[]'::json) from my_games_overview() g)
     );
 $$;
 
@@ -865,6 +902,11 @@ end;
 $$;
 
 -- 4. triggers -----------------------------------------------------------
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function handle_new_user();
 
 drop trigger if exists trg_onboarding_complete on onboarding_answers;
 create trigger trg_onboarding_complete

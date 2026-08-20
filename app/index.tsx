@@ -64,33 +64,20 @@ export default function Home() {
 
 
   const load = useCallback(async () => {
-    const { data, error } = await supabase.rpc('my_games_overview');
-    if (!error && data) setGames(data as GameOverview[]);
+    const { data, error } = await supabase.rpc('home_overview');
+    if (!error && data) {
+      setGames((data.games ?? []) as GameOverview[]);
+      setDisplayName(data.display_name ?? '');
+      setAnsweredCount(data.answered_count ?? 0);
+      setOtd(data.on_this_day ?? null);
+    }
     setFetching(false);
     setRefreshing(false);
   }, []);
 
   useFocusEffect(
     useCallback(() => {
-      if (session) {
-        load();
-        supabase
-          .from('profiles')
-          .select('display_name')
-          .eq('id', session.user.id)
-          .single()
-          .then(({ data }) => {
-            if (data) setDisplayName(data.display_name);
-          });
-        supabase
-          .from('onboarding_answers')
-          .select('question_idx', { count: 'exact', head: true })
-          .eq('user_id', session.user.id)
-          .then(({ count }) => setAnsweredCount(count ?? 0));
-        supabase.rpc('on_this_day').then(({ data }) => {
-          setOtd(data && data.length > 0 ? data[0] : null);
-        });
-      }
+      if (session) load();
     }, [session, load]),
   );
 
