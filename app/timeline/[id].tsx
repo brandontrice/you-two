@@ -60,7 +60,8 @@ export default function Timeline() {
     useCallback(() => {
       let alive = true;
       (async () => {
-        const { data } = await supabase.rpc('game_timeline', { p_game_id: id });
+        const { data, error } = await supabase.rpc('game_timeline', { p_game_id: id });
+        if (error) console.error('game_timeline failed:', error.message);
         const rows = (data ?? []) as TimelineRow[];
 
         // Group the flat rows into one entry per prompt.
@@ -157,7 +158,11 @@ export default function Timeline() {
                 {item.subs.map((s) => (
                   <View key={s.sub_id} style={styles.photoCol}>
                     {urls[s.sub_id] ? (
-                      <Image source={{ uri: urls[s.sub_id] }} style={styles.photo} />
+                      <Image
+                        source={{ uri: urls[s.sub_id] }}
+                        style={styles.photo}
+                        accessibilityLabel={`${s.sub_user === myId ? 'Your' : `${s.display_name}'s`} photo`}
+                      />
                     ) : (
                       <View style={[styles.photo, styles.photoLoading]}>
                         <ActivityIndicator color={c.wine} />

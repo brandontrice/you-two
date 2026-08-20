@@ -48,6 +48,8 @@ export default function Onboarding() {
         .select('question_idx, answer')
         .eq('user_id', session.user.id),
     ]).then(([q, a]) => {
+      if (q.error) console.error('onboarding_questions fetch failed:', q.error.message);
+      if (a.error) console.error('onboarding_answers fetch failed:', a.error.message);
       setQuestions((q.data ?? []) as Question[]);
       const existing: Record<number, string> = {};
       for (const row of a.data ?? []) existing[row.question_idx] = row.answer;

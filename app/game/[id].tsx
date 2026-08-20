@@ -40,6 +40,14 @@ type Submission = {
 
 const REACTIONS = ['❤️', '😂', '😮', '🔥', '😭', '👏'];
 
+function formatCountdown(expiresAt: string, now: number): string | null {
+  const diffMinutes = Math.ceil((new Date(expiresAt).getTime() - now) / 60000);
+  if (diffMinutes <= 0) return null;
+  const hours = Math.floor(diffMinutes / 60);
+  const minutes = diffMinutes % 60;
+  return hours > 0 ? `expires in ${hours}h ${minutes}m` : `expires in ${minutes}m`;
+}
+
 export default function GameScreen() {
   // ---------- hooks (always first, never conditional) ----------
   const router = useRouter();
@@ -64,10 +72,17 @@ export default function GameScreen() {
   const prevBonus = useRef<number | null>(null);
   const { c } = useTheme();
   const styles = useMemo(() => makeStyles(c), [c]);
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), 30000);
+    return () => clearInterval(interval);
+  }, []);
 
 
   const load = useCallback(async () => {
-    const { data } = await supabase.rpc('my_games_overview');
+    const { data, error } = await supabase.rpc('my_games_overview');
+    if (error) console.error('my_games_overview failed:', error.message);
     const list = Array.isArray(data) ? (data as GameOverview[]) : [];
     const match = list.find((row) => row.game_id === gameId) ?? null;
     setGame(match);
@@ -81,10 +96,11 @@ export default function GameScreen() {
     }
 
     if (match && match.gp_id) {
-      const { data: subData } = await supabase
+      const { data: subData, error: subError } = await supabase
         .from('submissions')
         .select('id, user_id, photo_path, caption, reaction')
         .eq('game_prompt_id', match.gp_id);
+      if (subError) console.error('submissions fetch failed:', subError.message);
 
       const subList = Array.isArray(subData) ? (subData as Submission[]) : [];
       setSubs(subList);
@@ -447,6 +463,9 @@ export default function GameScreen() {
                   <Reveal key={g.gp_id ?? 'none'} delay={120}>
                     <Text style={styles.heroPrompt}>{g.prompt_body}</Text>
                   </Reveal>
+                  {!revealed && g.expires_at && formatCountdown(g.expires_at, now) && (
+                    <Text style={styles.countdown}>{formatCountdown(g.expires_at, now)}</Text>
+                  )}
                   {canShuffle && g.my_skip_balance > 0 && (
                     <Pressable onPress={skip} hitSlop={8}>
                       <Text style={styles.shuffle}>
@@ -467,7 +486,11 @@ export default function GameScreen() {
               {mySub === null ? (
                 pickedUri !== null ? (
                   <View style={styles.answerCard}>
-                    <Image source={{ uri: pickedUri }} style={styles.photo} />
+                    <Image
+                      source={{ uri: pickedUri }}
+                      style={styles.photo}
+                      accessibilityLabel="Your photo, not yet sent"
+                    />
                     <TextInput
                       style={styles.captionInput}
                       placeholder="Add a caption (optional)"
@@ -538,7 +561,11 @@ export default function GameScreen() {
                     )}
                   </View>
                   {urls[mySub.id] !== undefined && (
-                    <Image source={{ uri: urls[mySub.id] }} style={styles.photo} />
+                    <Image
+                      source={{ uri: urls[mySub.id] }}
+                      style={styles.photo}
+                      accessibilityLabel="Your photo"
+                    />
                   )}
                   {mySub.caption !== null && (
                     <Text style={styles.caption}>{mySub.caption}</Text>
@@ -552,7 +579,11 @@ export default function GameScreen() {
                     <Text style={styles.answerTitle}>{g.partner_name} ✦</Text>
                   </View>
                   {urls[theirSub.id] !== undefined && (
-                    <Image source={{ uri: urls[theirSub.id] }} style={styles.photo} />
+                    <Image
+                      source={{ uri: urls[theirSub.id] }}
+                      style={styles.photo}
+                      accessibilityLabel={`${g.partner_name ?? 'Their'}'s photo`}
+                    />
                   )}
                   {theirSub.caption !== null && (
                     <Text style={styles.caption}>{theirSub.caption}</Text>
@@ -566,6 +597,8 @@ export default function GameScreen() {
                           theirSub.reaction === e && styles.reactionActive,
                         ]}
                         onPress={() => react(theirSub.id, e)}
+                        accessibilityLabel={`React with ${e}`}
+                        accessibilityRole="button"
                       >
                         <Text style={styles.reactionEmoji}>{e}</Text>
                       </Pressable>
@@ -733,6 +766,7 @@ const makeStyles = (c: Palette) => StyleSheet.create({
     letterSpacing: 3,
   },
   shuffle: { fontSize: 14, fontFamily: fonts.italic, color: c.gold },
+  countdown: { fontSize: 13, fontFamily: fonts.italic, color: c.muted },
   heroPrompt: {
     fontSize: 24,
     fontFamily: fonts.italic,
