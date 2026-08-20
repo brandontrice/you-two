@@ -1,0 +1,28 @@
+export type GameOverview = {
+  game_id: string;
+  invite_code: string;
+  queue_type: 'partner' | 'sibling' | 'parent' | 'general';
+  partner_name: string | null;
+  member_count: number;
+  gp_id: string | null;
+  prompt_body: string | null;
+  is_bonus: boolean | null;
+  dropped_at: string | null;
+  expires_at: string | null;
+  i_submitted: boolean;
+  partner_submitted: boolean;
+  my_completions: number;
+  my_bonus_balance: number;
+  i_onboarded: boolean;
+  partner_onboarded: boolean;
+  partner_id: string | null;
+  my_score: number;
+  partner_score: number;
+  i_voted: boolean;
+  partner_voted: boolean;
+  my_vote_for: string | null;
+  their_vote_for: string | null;
+  stakes: number | null;
+  declared_by: string | null;
+  my_skip_balance: number;
+};
